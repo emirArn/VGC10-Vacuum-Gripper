@@ -1,0 +1,101 @@
+{
+  "PROVISIONAL": true,
+  "provisional_note": "Bu esikler OFFLINE val kumesinden - GERCEK ROBOT KALIBRASYONU DEGIL. README'nin kendi kuralı: cevrimdisi esik donanima tasinmaz (21.08.2026, 26.08.2026 deneyimleri). Robotta calistirmadan once calibrate_cell.py ile (ya da esdegeriyle) yeniden olculmesi SART.",
+  "norm": "log",
+  "log_norm": {
+    "residual": {
+      "mean": -1.6863114543992108,
+      "std": 0.5485793296690996
+    },
+    "raw": {
+      "mean": -2.047471261395057,
+      "std": 0.835298367160864
+    },
+    "eps": 1e-09
+  },
+  "w_kal": 0.9,
+  "w_ham": 0.1,
+  "w_source": "measured (evaluate_faults.py, fiziksel-tutarlı arıza enjeksiyonu, 3 normalizasyon x raw16/raw18/raw24 tarandı, secilen: raw16 + log)",
+  "threshold_by_regime": {
+    "static": {
+      "p97": -0.03917484226761585,
+      "p99": 0.6940268725817376,
+      "p99.9": 2.1350744118339997,
+      "p99.99": 2.4227317422140615
+    },
+    "moving": {
+      "p97": 2.8189970016917028,
+      "p99": 3.384965314356816,
+      "p99.9": 3.9029819071049334,
+      "p99.99": 4.229308174571658
+    }
+  },
+  "threshold_by_regime_by_use_case": {
+    "_note": "use_case eşleşmesinde buradaki anahtar bulunamazsa üstteki (generic, offline) threshold_by_regime'e düşülür. Buradakiler GERÇEK HÜCREDEN ölçüldü - ama her biri TEK oturum, küçük örneklem; daha fazla temiz HRC/PICKPLACE verisiyle yeniden ölçülmeli.",
+    "HRC": {
+      "calibrated_on": "gerçek hücre, 2026-09-30 17:31 oturumu (anomali_kayit_hrc, 11654 örnek, etiketlenmiş: gerçek anomali YOK, 9/9 olay 'yanlis')",
+      "note": "Vidalama temas pozunda (J2/J3 akımı 4-11A, aktif sıkma reaksiyonu) kalıntı fizik modelinde temsil edilmiyor - bu NORMAL operasyon, eşik buna göre yükseltildi. quantile=p99.99 (fiilen bugünkü maksimuma eşit) ÖNERİLİR; p99.9 bu oturumdaki 9 olayın 3'ünü hâlâ geçiyor.",
+      "static": {
+        "p97": 0.493578,
+        "p99": 1.09914,
+        "p99.9": 4.11339,
+        "p99.99": 5.32679
+      },
+      "moving": {
+        "p97": 2.39385,
+        "p99": 3.34434,
+        "p99.9": 4.64499,
+        "p99.99": 4.95142
+      }
+    },
+    "PICKPLACE": {
+      "calibrated_on": "gerçek hücre, 2026-10-01 11:52 + 12:05 oturumları (anomali_kayit_pickplace, 2 koşu, 15232 örnek birleşik). Gerçek anomali 2/2 etiketlendi (sira6 statik tepe=4.431, sira11 moving tepe=5.897, 205 sn sürdü) - eşik hesabından bu iki olayın ±1 sn penceresi ÇIKARILDI (yoksa threshold kendi kendini kirletir).",
+      "note": "Büyük J1 taban dönüşleri ve tutma/bırakma pozları (q örn. J1≈5.5, J4≈±5) birkaç yanlış alarma yol açıyordu, HRC'deki temas pozu gibi fizik modelinde temsil edilmiyor. quantile=p99.99 ile backtest: 18 yanlış alarm -> 0, 2 gerçek olay 2/2 yakalandı (sira11 payı geniş: 5.90 vs eşik 4.26; sira6 payı DAR: 4.43 vs eşik 3.99/4.13 - yalnız ~%7 marj, ileride daha fazla veriyle sıkılaştırılmalı).",
+      "static": {
+        "p97": 0.20713,
+        "p99": 1.48836,
+        "p99.9": 3.218,
+        "p99.99": 3.99125
+      },
+      "moving": {
+        "p97": 3.33184,
+        "p99": 3.89642,
+        "p99.9": 4.2311,
+        "p99.99": 4.25799
+      }
+    },
+    "UR10E_INSPECTION": {
+      "calibrated_on": "gerçek hücre, 2026-10-01 12:18 oturumu (anomali_kayit_urinspection, 6819 örnek, 0 olay - tamamen temiz). 30.09.2026'nın 130713 koşusuyla (jenerik eşiğin dayandığı offline değerlere yakın, medyanlar tutarlı) uyumlu, bu use_case'in gerçek robotta zaten iyi davrandığını doğruluyor.",
+      "note": "Jenerik (offline) eşikten belirgin sapma yok (bu oturumun p99.9'u static 1.66/moving 3.52, jenerik 2.14/3.90 - zaten gevşek tarafta). Sıkılaştırma amaçlı eklendi, acil bir düzeltme değil.",
+      "static": {
+        "p97": 0.892903,
+        "p99": 1.13801,
+        "p99.9": 1.66163,
+        "p99.99": 1.67626
+      },
+      "moving": {
+        "p97": 2.4489,
+        "p99": 2.74633,
+        "p99.9": 3.52003,
+        "p99.99": 3.74943
+      }
+    }
+  },
+  "regime_threshold": true,
+  "motion_qd_min": 0.02,
+  "moving_val_fraction": 0.42359095004504954,
+  "residual": {
+    "threshold": 0.5646076798439026
+  },
+  "raw": {
+    "threshold": 0.7391416430473328
+  },
+  "friction_applied": true,
+  "kts_removed": true,
+  "calibrated_on": "offline (training_features.csv, val split)",
+  "exported_at": "2026-09-28T10:48:08",
+  "source_models": {
+    "residual": "residual",
+    "raw": "raw16"
+  }
+}
