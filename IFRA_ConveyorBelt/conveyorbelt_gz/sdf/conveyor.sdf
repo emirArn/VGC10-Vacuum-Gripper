@@ -71,11 +71,56 @@
 
       <collision name="belt_fixed_collision">
         <!-- Konveyor govdesinin box yaklasimi (W x D x H metre) -->
-        <pose>0 0 0.4428 0 0 0</pose>
+        <pose>0 0 0.41 0 0 0</pose>
         <geometry>
-          <box><size>0.3584 0.9689 0.8</size></box>
+          <box><size>0.3584 0.9689 0.82</size></box>
         </geometry>
       </collision>
+
+      <!-- Alt donus seridi -->
+      <visual name="belt_bottom_visual">
+        <pose>-0.002 0.018 0.8054 0 0 0</pose>
+        <geometry>
+          <box><size>0.200 0.9444 0.004</size></box>
+        </geometry>
+        <material>
+          <ambient>0.0 0.6 0.0 1</ambient>
+          <diffuse>0.0 0.8 0.0 1</diffuse>
+          <specular>0.1 0.3 0.1 1</specular>
+        </material>
+      </visual>
+
+      <!-- On tamburlu rulman (sabit: tamburlar disari firlamaz) -->
+      <visual name="belt_drum_front_visual">
+        <pose>-0.0105 0.4945 0.8244 0 1.5708 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.019</radius>
+            <length>0.26</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.0 0.6 0.0 1</ambient>
+          <diffuse>0.0 0.8 0.0 1</diffuse>
+          <specular>0.1 0.3 0.1 1</specular>
+        </material>
+      </visual>
+
+      <!-- Arka tamburlu rulman (sabit) -->
+      <visual name="belt_drum_back_visual">
+        <pose>-0.0105 -0.4577 0.8244 0 1.5708 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.019</radius>
+            <length>0.26</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <ambient>0.0 0.6 0.0 1</ambient>
+          <diffuse>0.0 0.8 0.0 1</diffuse>
+          <specular>0.1 0.3 0.1 1</specular>
+        </material>
+      </visual>
 
     </link>
 
@@ -94,10 +139,10 @@
       </inertial>
 
       <collision name="belt_moving_collision">
-        <!-- Gercek bant alani: 0.2783 x 0.9522 m -->
-        <pose>-0.0105 0.0184 0 0 0 0</pose>
+        <!-- Gercek bant alani: 0.2783 x 0.9522 m, kalinlik 0.01m (1 cm) -->
+        <pose>-0.0105 0.0184 -0.0045 0 0 0</pose>
         <geometry>
-          <box><size>0.2783 0.9522 0.001</size></box>
+          <box><size>0.2783 0.9522 0.01</size></box>
         </geometry>
         <surface>
           <contact/>
@@ -114,59 +159,11 @@
         </surface>
       </collision>
 
-      <!-- Ust bant yüzeyi (hareket eder) -->
-      <!-- STL bant alani: genislik=0.2783m, uzunluk=0.9522m -->
-      <!-- Merkez offset: X=-0.0105, Y=+0.0184 (STL'ye gore) -->
+      <!-- Ust bant yüzeyi (hareketli: 9 mm tatli mikro-hareket ile donme efekti) -->
       <visual name="belt_top_visual">
         <pose>-0.0105 0.0184 0 0 0 0</pose>
         <geometry>
           <box><size>0.26 0.9522 0.004</size></box>
-        </geometry>
-        <material>
-          <ambient>0.0 0.6 0.0 1</ambient>
-          <diffuse>0.0 0.8 0.0 1</diffuse>
-          <specular>0.1 0.3 0.1 1</specular>
-        </material>
-      </visual>
-
-      <!-- Alt donus seridi: STL downward surface Z=819.8mm -> local Z=-0.0236m -->
-      <visual name="belt_bottom_visual">
-        <pose>-0.002 0.018 -0.038 0 0 0</pose>
-        <geometry>
-          <box><size>0.200 0.9444 0.004</size></box>
-        </geometry>
-        <material>
-          <ambient>0.0 0.6 0.0 1</ambient>
-          <diffuse>0.0 0.8 0.0 1</diffuse>
-          <specular>0.1 0.3 0.1 1</specular>
-        </material>
-      </visual>
-
-      <!-- On tamburlu rulman: yaricap=0.019m, X ekseni boyunca uzanir -->
-      <!-- RPY=(0, pi/2, 0) -> silindiri Z'den X eksenine dondurur -->
-      <visual name="belt_drum_front_visual">
-        <pose>-0.0105 0.4945 -0.019 0 1.5708 0</pose>
-        <geometry>
-          <cylinder>
-            <radius>0.019</radius>
-            <length>0.26</length>
-          </cylinder>
-        </geometry>
-        <material>
-          <ambient>0.0 0.6 0.0 1</ambient>
-          <diffuse>0.0 0.8 0.0 1</diffuse>
-          <specular>0.1 0.3 0.1 1</specular>
-        </material>
-      </visual>
-
-      <!-- Arka tamburlu rulman: yaricap=0.019m -->
-      <visual name="belt_drum_back_visual">
-        <pose>-0.0105 -0.4577 -0.019 0 1.5708 0</pose>
-        <geometry>
-          <cylinder>
-            <radius>0.019</radius>
-            <length>0.26</length>
-          </cylinder>
         </geometry>
         <material>
           <ambient>0.0 0.6 0.0 1</ambient>

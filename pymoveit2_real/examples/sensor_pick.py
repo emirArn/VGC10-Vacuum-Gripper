@@ -108,6 +108,7 @@ class LidarMonitorNode(Node):
         )
         self.monitoring_contact_active = False
         self._debug_contact_count = 0
+        self.contact_callback_fn = None
 
     # --- 1. LIDAR FONKSİYONU ---
     def lidar_start_callback(self, msg):
@@ -160,6 +161,11 @@ class LidarMonitorNode(Node):
             self.get_logger().info(f"📡 TEMAS ALGILANDI! (contacts={len(msg.contacts)})")
             self.monitoring_contact_active = False
             CONTACT_DETECTED_EVENT.set()
+            if self.contact_callback_fn is not None:
+                try:
+                    self.contact_callback_fn()
+                except Exception as e:
+                    self.get_logger().error(f"contact_callback_fn hatası: {e}")
 
 # ====================================================
 # DÜĞÜM 2: SADECE ROBOTU YÖNETEN SİSTEM
@@ -186,6 +192,8 @@ class SmartPickSequence(Node):
         self.arm.max_acceleration = 0.08
 
         self.vacuum_pub = self.create_publisher(Bool, '/suction/enable', 10)
+        # Temas sensörü doğrudan bu callback'i tetikleyecek (0 ms gecikme)
+        self.lidar_node.contact_callback_fn = self.on_contact_detected
 
         # ── Ortak Waypoint'ler (WP1 ~ WP4) ──
         self.wp1 = [0.11156, -0.87965, -0.98520, 1.07003, 1.18878, 0.56172, 0.34306]
@@ -206,6 +214,27 @@ class SmartPickSequence(Node):
         ]
 
         self.get_logger().info("🟢 Robot Kontrolcüsü hazır! (4 Toolkit Cyclic Mod)")
+
+    def on_contact_detected(self):
+        """Temas algılandığı mikrosaniyede doğrudan sensor callback'i içinden çalışır (0 ms gecikme)."""
+        self.get_logger().info("⚡ [ANINDA MÜDAHALE] Temas algılandı! Vakum açılıyor ve hareket kesiliyor...")
+        
+        # 1. HEMEN VAKUMU BAS (Temas yüzeyi ayrılmadan Gazebo'da kilitlensin)
+        suction_msg = Bool()
+        suction_msg.data = True
+        for _ in range(3):
+            self.vacuum_pub.publish(suction_msg)
+
+        # 2. HAREKETİ ANINDA DURDUR (MoveIt trajectory execution event'e stop bas)
+        self.arm.cancel_execution()
+
+        # 3. Action Goal Handle üzerinden iptal gönder
+        try:
+            goal_handle = getattr(self.arm, "_MoveIt2__execution_goal_handle", None)
+            if goal_handle is not None:
+                goal_handle.cancel_goal_async()
+        except Exception:
+            pass
 
     def spawn_box(self):
         """Gazebo'da yeni bir box spawn eder (box0, box1, box2, ...)."""
@@ -237,24 +266,29 @@ class SmartPickSequence(Node):
             self.get_logger().error(f"❌ {box_name} spawn exception: {e}")
 
     def force_cancel_motion(self):
-        """Aktif trajectory execution'ı zorla ve garantili iptal eder."""
-        self.get_logger().info("🛑 Hareket zorla iptal ediliyor...")
+        """Aktif trajectory execution'ı zorla ve güvenli şekilde iptal eder."""
+        self.get_logger().info("🛑 Hareket iptal ediliyor...")
 
+        # 1. MoveIt trajectory execution manager'a durdur emri
         self.arm.cancel_execution()
 
+        # 2. Action Goal Handle üzerinden cancel isteği gönder
         try:
-            goal_handle = self.arm._MoveIt2__execution_goal_handle
+            goal_handle = getattr(self.arm, "_MoveIt2__execution_goal_handle", None)
             if goal_handle is not None:
                 self.get_logger().info("   Action goal handle cancel ediliyor...")
-                cancel_future = goal_handle.cancel_goal_async()
-                # Diğer koddaki bekleme (while) mantığı burada:
-                timeout = time.time() + 2.0
-                while not cancel_future.done() and time.time() < timeout:
-                    time.sleep(0.01)
-                self.get_logger().info("   Action goal cancel isteği gönderildi.")
-        except AttributeError:
-            self.get_logger().warn("   Goal handle'a erişilemedi (name mangling).")
+                goal_handle.cancel_goal_async()
+        except Exception as e:
+            self.get_logger().warn(f"   Goal handle cancel hatası: {e}")
 
+        # 3. İptalin MoveIt tarafından işlenip tamamlanmasını bekle (race condition koruması)
+        timeout = time.time() + 1.0
+        while time.time() < timeout:
+            if not getattr(self.arm, "_MoveIt2__is_executing", False):
+                break
+            time.sleep(0.01)
+
+        # 4. State bayraklarını temizle
         try:
             self.arm._MoveIt2__is_motion_requested = False
             self.arm._MoveIt2__is_executing = False
@@ -263,7 +297,7 @@ class SmartPickSequence(Node):
         except AttributeError:
             pass
 
-        self.get_logger().info("✅ Hareket iptal edildi.")
+        self.get_logger().info("✅ Hareket iptali tamamlandı.")
 
     def set_vacuum(self, state: bool):
         suction_msg = Bool()
@@ -303,50 +337,36 @@ class SmartPickSequence(Node):
             self.get_logger().info("🚀 Lidar'dan Sinyal alındı! WP2'ye iniliyor!")
             self.get_logger().info("➡️ AŞAMA 2: WP2'ye iniliyor. Temas dinleme AKTİF!")
             
-            self.arm.max_velocity = 0.07
-            self.arm.max_acceleration = 0.07
+            # max_acceleration yüksek (0.8) tutularak temas algılandığında
+            # robotun anında fren yapması ve kutuyu ezmemesi/sekmemesi sağlanır
+            self.arm.max_velocity = 0.30
+            self.arm.max_acceleration = 0.8
             
             CONTACT_DETECTED_EVENT.clear()
             self.lidar_node.monitoring_contact_active = True
-
-            contact_detected_flag = [False]
-
-            def contact_interrupt_monitor():
-                if CONTACT_DETECTED_EVENT.wait():
-                    self.get_logger().info("💥 TEMAS EVENT'İ TETİKLENDİ! Hareket kesiliyor...")
-                    self.force_cancel_motion()
-                    
-                    suction_msg = Bool()
-                    suction_msg.data = True
-                    for _ in range(3):
-                        self.vacuum_pub.publish(suction_msg)
-                    self.get_logger().info("✅ Vakum AÇILDI (temas anında)")
-                    contact_detected_flag[0] = True
-
-            contact_thread = Thread(target=contact_interrupt_monitor, daemon=True)
-            contact_thread.start()
 
             self.arm.move_to_configuration(joint_positions=self.wp2)
             self.arm.wait_until_executed()
 
             if not CONTACT_DETECTED_EVENT.is_set():
-                self.get_logger().info("⏳ Hareket bitti, temas event'i bekleniyor (max 1.5s)...")
-                CONTACT_DETECTED_EVENT.wait(timeout=1.5)
+                self.get_logger().info("⏳ Hareket bitti, temas event'i bekleniyor (max 0.5s)...")
+                CONTACT_DETECTED_EVENT.wait(timeout=0.5)
 
             self.lidar_node.monitoring_contact_active = False
 
-            if contact_detected_flag[0] or CONTACT_DETECTED_EVENT.is_set():
-                self.get_logger().info("💥 Temas başarıyla yakalandı ve duruldu!")
-                self.get_logger().info("⚡ Vakum yapıştı! Yukarı çıkılıyor...")
-                time.sleep(0.1)
+            if CONTACT_DETECTED_EVENT.is_set():
+                self.get_logger().info("💥 Temas başarıyla yakalandı, vakum kilitlendi ve duruldu!")
             else:
                 self.get_logger().warn("⚠️ Temas algılanmadı, robot doğrudan WP2 noktasına kadar indi!")
                 self.set_vacuum(True)
-                time.sleep(0.1)
 
-            self.arm.max_velocity = 0.04
-            self.arm.max_acceleration = 0.04
-            time.sleep(0.2)
+            # MoveIt ve controller'ın eski iptal edilmiş hedefi temizlemesini garantile (WP3 koruması)
+            self.force_cancel_motion()
+            time.sleep(0.15)
+
+            self.arm.max_velocity = 0.08
+            self.arm.max_acceleration = 0.10
+            time.sleep(0.1)
 
             # ================== AŞAMA 3: WP3 (LİDAR 2 İPTAL KORUMASI) ==================
             self.get_logger().info("➡️ AŞAMA 3: WP3'e gidiliyor (Lidar 2 İptal Koruması AKTİF)...")
