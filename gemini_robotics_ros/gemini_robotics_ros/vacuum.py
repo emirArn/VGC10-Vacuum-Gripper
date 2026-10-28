@@ -22,7 +22,7 @@ import time
 from typing import Optional
 
 from rclpy.node import Node
-from std_msgs.msg import Empty
+from std_msgs.msg import Bool, Empty
 
 from vgc10_msgs.msg import OnRobotVGInput, OnRobotVGOutput
 
@@ -63,6 +63,8 @@ class VacuumGripper:
         require_confirmation: bool = False,
         sim_attach_topic: str = "",
         sim_detach_topic: str = "",
+        sim_suction_topic: str = "/suction/enable",
+        use_fake_hardware: bool = False,
     ):
         self._node = node
         self._vacuum_pct = max(0, min(MAX_VACUUM_PCT, int(vacuum_pct)))
@@ -70,6 +72,7 @@ class VacuumGripper:
         self._confirm_pct = float(grip_confirm_pct)
         self._timeout = float(grip_timeout_sec)
         self._require_confirmation = bool(require_confirmation)
+        self._use_fake_hardware = bool(use_fake_hardware)
 
         self._pub = node.create_publisher(OnRobotVGOutput, command_topic, 10)
         self._status: Optional[OnRobotVGInput] = None
@@ -90,6 +93,11 @@ class VacuumGripper:
         self._detach_pub = (
             node.create_publisher(Empty, sim_detach_topic, 10)
             if sim_detach_topic else None
+        )
+        # Gazebo SuctionPlugin (/suction/enable - std_msgs/Bool) yayıncısı
+        self._suction_pub = (
+            node.create_publisher(Bool, sim_suction_topic, 10)
+            if sim_suction_topic else None
         )
 
         if int(vacuum_pct) > MAX_VACUUM_PCT:
@@ -223,3 +231,49 @@ class VacuumGripper:
         spawn'dan sonra bir detach yayınlıyor; bu ikinci kemer.
         """
         self._sim_detach()
+
+    # --- Gazebo SuctionPlugin (/suction/enable) & Real/Sim Ayrımı ---------
+
+    def sim_grip(self, repeat: int = 5, delay: float = 0.05) -> None:
+        """Gazebo'daki SuctionPlugin'e (/suction/enable) True basarak kutuyu tutar."""
+        if self._suction_pub is not None:
+            suction_msg = Bool()
+            suction_msg.data = True
+            for _ in range(repeat):
+                self._suction_pub.publish(suction_msg)
+                if delay > 0.0:
+                    time.sleep(delay)
+        self._sim_attach()
+        self._node.get_logger().info("SIM: vakum AÇIK (/suction/enable -> True)")
+
+    def sim_release(self, repeat: int = 5, delay: float = 0.05) -> None:
+        """Gazebo'daki SuctionPlugin'e (/suction/enable) False basarak kutuyu bırakır."""
+        if self._suction_pub is not None:
+            suction_msg = Bool()
+            suction_msg.data = False
+            for _ in range(repeat):
+                self._suction_pub.publish(suction_msg)
+                if delay > 0.0:
+                    time.sleep(delay)
+        self._sim_detach()
+        self._node.get_logger().info("SIM: vakum KAPALI (/suction/enable -> False)")
+
+    def real_grip(self, wait: bool = True) -> bool:
+        """Gerçek OnRobot VGC10 pompasını çalıştırır (use_fake_hardware=True ise atlar)."""
+        if self._use_fake_hardware:
+            return True
+        if not wait and not self._require_confirmation:
+            self._send(MODE_GRIP, self._vacuum_pct)
+            self._node.get_logger().info(f"VAKUM AÇ (hedef {self._vacuum_pct}%)")
+            return True
+        return self.grip()
+
+    def real_release(self, wait: bool = True) -> bool:
+        """Gerçek OnRobot VGC10 vakumunu bırakır (use_fake_hardware=True ise atlar)."""
+        if self._use_fake_hardware:
+            return True
+        if not wait:
+            self._send(MODE_RELEASE, 0)
+            self._node.get_logger().info("VAKUM BIRAK")
+            return True
+        return self.release()
